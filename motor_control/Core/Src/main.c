@@ -15,9 +15,11 @@
   *
   ******************************************************************************
   */
+#include "motor.h"
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -94,10 +96,8 @@ int main(void)
   MX_TIM2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);  // Starts PWM signal on TIM2 Channel 1
-
-  // Example: Set duty cycle (pulse width) to 500
-  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 500);
+  motor_init();
+  frontLeft_motor.target_rpm = 150;// This sets up GPIO and starts PWM
 
   /* USER CODE END 2 */
 
@@ -105,9 +105,16 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
+      // 1. Recalculate RPM for each motor
+      calculate_rpm(&frontLeft_motor);
 
-    /* USER CODE BEGIN 3 */
+      // 2. Run PID controller
+      int pwm_output = motor_update_pid(&frontLeft_motor);
+
+      // 3. Apply result
+      motor_set(1, pwm_output);  // 1 = forward
+
+      HAL_Delay(100);  // Update every 100 ms
   }
   /* USER CODE END 3 */
 }
@@ -174,7 +181,8 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
+//  htim2.Init.Period = 4294967295;
+  htim2.Init.Period = 1000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
