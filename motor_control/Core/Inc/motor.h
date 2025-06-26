@@ -9,6 +9,7 @@ void motor_init(void);
 void motor_set(uint8_t direction, uint16_t speed);
 void encoder_update(encoded_motor_info *motor, int A_state, int B_state);
 int calculate_rpm(encoded_motor_info *motor);
+int motor_update_pid(encoded_motor_info* motor);
 
 
 typedef struct {
