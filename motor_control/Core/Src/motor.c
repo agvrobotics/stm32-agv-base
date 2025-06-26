@@ -1,6 +1,17 @@
 // motor.c
 #include "motor.h"
 #include "stm32f4xx_hal.h"
+#include <stdio.h>
+
+extern UART_HandleTypeDef huart2;
+extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim4;
+
+char serialBuffer[100];
+int serialIndex = 0;
+bool commandReady = false;
+uint32_t last_serial_command_time = 0;
+const uint32_t command_timeout_ms = 1000;
 
 void motor_init(void) {
     GPIO_InitTypeDef GPIO_InitStruct = {0};

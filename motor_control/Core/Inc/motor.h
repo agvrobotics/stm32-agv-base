@@ -4,16 +4,11 @@
 #include "stm32f4xx_hal.h"
 #include <stdbool.h>
 
-char serialBuffer[100];
-uint8_t serialIndex = 0;
-bool commandReady = false;
-uint32_t last_serial_command_time = 0;
-uint32_t command_timeout_ms = 1000;
-void motor_init(void);
-void motor_set(uint8_t direction, uint16_t speed);
-void encoder_update(encoded_motor_info *motor, int A_state, int B_state);
-int calculate_rpm(encoded_motor_info *motor);
-int motor_update_pid(encoded_motor_info* motor);
+extern char serialBuffer[100];
+extern int serialIndex;
+extern bool commandReady;
+extern uint32_t last_serial_command_time;
+extern const uint32_t command_timeout_ms;
 
 typedef struct {
     // Pin configuration
@@ -59,6 +54,15 @@ typedef struct {
     bool direction_actual;
 } encoded_motor_info;
 
+void motor_init(void);
+void motor_set(encoded_motor_info *motor, uint8_t direction, uint16_t speed);
+void encoder_update(encoded_motor_info *motor, int A_state, int B_state);
+int calculate_rpm(encoded_motor_info *motor);
+int motor_update_pid(encoded_motor_info* motor);
+void reset_all_pid(void);
+void update_pid_from_serial(char *cmd);
+void handle_serial_input(void);
+void process_command(void);
 // Declare 2 motor objects for your AGV
 extern encoded_motor_info left_motor;
 extern encoded_motor_info right_motor;
