@@ -5,27 +5,37 @@
 void motor_init(void) {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-    // 1. Configure Direction pins PA4 and PA5 as output push-pull
+    // --- Left Motor Direction Pins (PA4, PA5) ---
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4 | GPIO_PIN_5, GPIO_PIN_RESET);
-
     GPIO_InitStruct.Pin = GPIO_PIN_4 | GPIO_PIN_5;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    // 2. Start PWM on TIM2 Channel 1 for speed control
-    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+    // --- Right Motor Direction Pins (PA6, PA7) ---
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6 | GPIO_PIN_7, GPIO_PIN_RESET);
+    GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
+    // Mode, Pull, Speed same as above
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    // 3. Set initial PWM duty cycle to 0 (motor stopped)
+    // --- Start PWM for Left Motor (TIM2 CH1) ---
+    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
 
-    // (Optional) You can initialize encoder pins here if needed
+    // --- Start PWM for Right Motor (TIM4 CH1) ---
+    HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
+    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
+
+    left_motor.target_rpm = 150;
+    right_motor.target_rpm = 150;
+    // (Optional) Initialize encoder pins or interrupts here if needed
 }
+
 
 // motor.c (add this below motor_init)
 
-void motor_set(uint8_t direction, uint16_t speed)
+void motor_set(encoded_motor_info *motor, uint8_t direction, uint16_t speed)
 {
     // direction: 0 = stop, 1 = forward, 2 = backward
     // speed: PWM duty cycle (0 to max timer period, e.g., 0-1000)
@@ -33,31 +43,32 @@ void motor_set(uint8_t direction, uint16_t speed)
     switch(direction)
     {
         case 0: // Stop
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
+            HAL_GPIO_WritePin(motor->DIR1_Port, motor->DIR1_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(motor->DIR2_Port, motor->DIR2_Pin, GPIO_PIN_RESET);
+            __HAL_TIM_SET_COMPARE(motor->htim_pwm, motor->pwm_channel, 0);
             break;
 
         case 1: // Forward
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed);
+            HAL_GPIO_WritePin(motor->DIR1_Port, motor->DIR1_Pin, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(motor->DIR2_Port, motor->DIR2_Pin, GPIO_PIN_RESET);
+            __HAL_TIM_SET_COMPARE(motor->htim_pwm, motor->pwm_channel, speed);
             break;
 
         case 2: // Backward
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed);
+            HAL_GPIO_WritePin(motor->DIR1_Port, motor->DIR1_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(motor->DIR2_Port, motor->DIR2_Pin, GPIO_PIN_SET);
+            __HAL_TIM_SET_COMPARE(motor->htim_pwm, motor->pwm_channel, speed);
             break;
 
         default:
             // Invalid direction: stop motor for safety
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
+            HAL_GPIO_WritePin(motor->DIR1_Port, motor->DIR1_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(motor->DIR2_Port, motor->DIR2_Pin, GPIO_PIN_RESET);
+            __HAL_TIM_SET_COMPARE(motor->htim_pwm, motor->pwm_channel, 0);
             break;
     }
 }
+
 
 // Update encoder count based on new A and B signals
 void encoder_update(encoded_motor_info *motor, int A_state, int B_state) {
@@ -123,24 +134,16 @@ static void update_encoder_count(encoded_motor_info *motor)
 // Override HAL GPIO EXTI callback for encoder pins
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-    // Handle encoder interrupts for all motors (example with 4 motors)
-    if(GPIO_Pin == frontLeft_motor.ENCA_Pin || GPIO_Pin == frontLeft_motor.ENCB_Pin)
+    if(GPIO_Pin == left_motor.ENCA_Pin || GPIO_Pin == left_motor.ENCB_Pin)
     {
-        update_encoder_count(&frontLeft_motor);
+        update_encoder_count(&left_motor);
     }
-    if(GPIO_Pin == frontRight_motor.ENCA_Pin || GPIO_Pin == frontRight_motor.ENCB_Pin)
+    if(GPIO_Pin == right_motor.ENCA_Pin || GPIO_Pin == right_motor.ENCB_Pin)
     {
-        update_encoder_count(&frontRight_motor);
-    }
-    if(GPIO_Pin == backLeft_motor.ENCA_Pin || GPIO_Pin == backLeft_motor.ENCB_Pin)
-    {
-        update_encoder_count(&backLeft_motor);
-    }
-    if(GPIO_Pin == backRight_motor.ENCA_Pin || GPIO_Pin == backRight_motor.ENCB_Pin)
-    {
-        update_encoder_count(&backRight_motor);
+        update_encoder_count(&right_motor);
     }
 }
+
 
 // motor.c
 
@@ -173,20 +176,76 @@ int motor_update_pid(encoded_motor_info* motor)
     return motor->pwm_value;
 }
 
+// --- Step 2: Function to reset PID state (equivalent to Arduino resetPID()) ---
+void reset_all_pid() {
+    left_motor.integral = right_motor.integral = 0;
+    left_motor.previous_error = right_motor.previous_error = 0;
+}
+// --- Step 3: Functions to parse "p10i0.5d0.1" style commands ---
+void update_pid_from_serial(char *cmd) {
+    float kp = 0, ki = 0, kd = 0;
+    if (sscanf(cmd, "p%fi%fd%f", &kp, &ki, &kd) == 3) {
+    	left_motor.kp = kp; left_motor.ki = ki; left_motor.kd = kd;
+    	right_motor.kp = kp; right_motor.ki = ki; right_motor.kd = kd;
+        reset_all_pid();
+        printf("PID updated: kp=%.2f ki=%.2f kd=%.2f\n", kp, ki, kd);
+    } else {
+        printf("Invalid PID format. Use p10i1d0.1\n");
+    }
+}
+
+// --- Step 4: Serial parser ---
+void handle_serial_input() {
+    while (HAL_UART_Receive(&huart2, (uint8_t*)&serialBuffer[serialIndex], 1, 0) == HAL_OK) {
+        char c = serialBuffer[serialIndex];
+        if (c == '\n' || c == '\r') {
+            serialBuffer[serialIndex] = '\0';
+            commandReady = true;
+            break;
+        } else {
+            serialIndex++;
+            if (serialIndex >= sizeof(serialBuffer) - 1) {
+                serialIndex = 0; // overflow safety
+            }
+        }
+    }
+}
+
+// --- Step 5: Command dispatcher ---
+void process_command() {
+    if (!commandReady) return;
+
+    if (serialBuffer[0] == 'p') {
+        update_pid_from_serial(serialBuffer); // PID tuning
+    } else if (serialBuffer[0] == 'e') {
+        printf("Encoders: Left=%ld Right=%ld\n",
+               left_motor.encoder_count, right_motor.encoder_count);
+    } else {
+        printf("Unknown command: %s\n", serialBuffer);
+    }
+
+    commandReady = false;
+    serialIndex = 0;
+    last_serial_command_time = HAL_GetTick();
+}
+
+
+
 // Define motor instances
-encoded_motor_info frontLeft_motor = {
+
+encoded_motor_info left_motor = {
     .DIR1_Port = GPIOA,
-    .DIR1_Pin = GPIO_PIN_4,
+    .DIR1_Pin = GPIO_PIN_4,       // DIR1 Left motor (PA4)
     .DIR2_Port = GPIOA,
-    .DIR2_Pin = GPIO_PIN_5,
+    .DIR2_Pin = GPIO_PIN_5,       // DIR2 Left motor (PA5)
     .htim_pwm = &htim2,
-    .pwm_channel = TIM_CHANNEL_1,
+    .pwm_channel = TIM_CHANNEL_1, // PWM Left motor (TIM2_CH1 on PA0)
     .ENCA_Port = GPIOB,
-    .ENCA_Pin = GPIO_PIN_0,
+    .ENCA_Pin = GPIO_PIN_0,       // Encoder A Left motor (PB0)
     .ENCB_Port = GPIOB,
-    .ENCB_Pin = GPIO_PIN_1,
-    .pulses_per_rev = 20.0f,  // Adjust based on your encoder
-    .counts_per_rev = 80.0f,  // If using quadrature ×4
+    .ENCB_Pin = GPIO_PIN_1,       // Encoder B Left motor (PB1)
+    .pulses_per_rev = 20.0f,
+    .counts_per_rev = 80.0f,
     .is_quadrature = true,
 
     .kp = 1.0f,
@@ -206,7 +265,36 @@ encoded_motor_info frontLeft_motor = {
     .direction_actual = true,
 };
 
-encoded_motor_info frontRight_motor = { /* duplicate and change pins */ };
-encoded_motor_info backLeft_motor   = { /* duplicate and change pins */ };
-encoded_motor_info backRight_motor = { /* duplicate and change pins */ };
+encoded_motor_info right_motor = {
+    .DIR1_Port = GPIOA,
+    .DIR1_Pin = GPIO_PIN_6,       // DIR1 Right motor (PA6)
+    .DIR2_Port = GPIOA,
+    .DIR2_Pin = GPIO_PIN_7,       // DIR2 Right motor (PA7)
+    .htim_pwm = &htim4,
+    .pwm_channel = TIM_CHANNEL_1, // PWM Right motor (TIM4_CH1 on PB6)
+    .ENCA_Port = GPIOB,
+    .ENCA_Pin = GPIO_PIN_10,      // Encoder A Right motor (PB10)
+    .ENCB_Port = GPIOB,
+    .ENCB_Pin = GPIO_PIN_8,       // Encoder B Right motor (PB8)
+    .pulses_per_rev = 20.0f,
+    .counts_per_rev = 80.0f,
+    .is_quadrature = true,
+
+    .kp = 1.0f,
+    .ki = 0.5f,
+    .kd = 0.1f,
+    .PID_scaling_factor = 1.0f,
+
+    .encoder_count = 0,
+    .prev_encoder_count = 0,
+    .last_pulse_time_us = 0,
+    .last_A_state = 0,
+    .last_B_state = 0,
+    .prev_rpm_calc_time_us = 0,
+    .current_rpm = 0,
+    .target_rpm = 0,
+    .pwm_value = 0,
+    .direction_actual = true,
+};
+
 

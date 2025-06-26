@@ -99,7 +99,6 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   motor_init();
-  frontLeft_motor.target_rpm = 150;// This sets up GPIO and starts PWM
 
   /* USER CODE END 2 */
 
@@ -107,6 +106,32 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  handle_serial_input();
+	  process_command();
+	  // 1. Calculate RPM for each motor from encoder counts
+	  calculate_rpm(&left_motor);
+	  calculate_rpm(&right_motor);
+
+	  // 2. Run PID update to get new PWM values
+	  int left_pwm = motor_update_pid(&left_motor);
+	  int right_pwm = motor_update_pid(&right_motor);
+
+	  // 3. Determine direction based on target RPM sign (assuming positive RPM means forward)
+	  uint8_t left_dir = (left_motor.target_rpm > 0) ? 1 : 2;
+	  uint8_t right_dir = (right_motor.target_rpm > 0) ? 1 : 2;
+
+	  // 4. Apply new PWM and direction to motors
+	  motor_set(&left_motor, left_dir, left_pwm);
+	  motor_set(&right_motor, right_dir, right_pwm);
+
+	  // 5. Optional: Add small delay or use a timer for consistent control loop timing
+	  HAL_Delay(10);  // 10 ms delay ~ 100 Hz control loop frequency
+
+	  // 6. Optional: UART debug prints for RPM and PWM values (commented out)
+	  /*
+	  printf("Left RPM: %d, PWM: %d\r\n", left_motor.current_rpm, left_pwm);
+	  printf("Right RPM: %d, PWM: %d\r\n", right_motor.current_rpm, right_pwm);
+	  */
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
